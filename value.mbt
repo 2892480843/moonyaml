@@ -10,7 +10,12 @@ pub(all) struct YamlPair {
   value : YamlValue
 } derive(Eq)
 
+///|
 pub extend YamlPair with Eq::{equal, not_equal}
+
+///|
+/// Compact flow-style output, convenient in tests and error messages.
+pub extend YamlPair with Show::{to_string, output}
 
 ///|
 /// Compact flow-style output, convenient in tests and error messages.
@@ -36,7 +41,12 @@ pub enum YamlValue {
   Map(Array[YamlPair])
 } derive(Eq)
 
+///|
 pub extend YamlValue with Eq::{equal, not_equal}
+
+///|
+/// Compact flow-style output, convenient in tests and error messages.
+pub extend YamlValue with Show::{to_string, output}
 
 ///|
 /// Compact flow-style output, convenient in tests and error messages.
@@ -65,13 +75,12 @@ pub fn YamlValue::get(self : YamlValue, key : String) -> YamlValue? {
 /// Index a sequence.
 pub fn YamlValue::at(self : YamlValue, index : Int) -> YamlValue? {
   match self {
-    Seq(items) => {
+    Seq(items) =>
       if index >= 0 && index < items.length() {
         Some(items[index])
       } else {
         None
       }
-    }
     _ => None
   }
 }
@@ -93,13 +102,17 @@ pub fn YamlValue::size(self : YamlValue) -> Int {
 ///|
 /// Parse an integer with an explicit radix; `None` on failure or overflow.
 fn try_parse_int64(s : String, radix : Int) -> Int64? {
-  try Some(@string.parse_int64(s, base=radix)) catch { _ => None }
+  Some(@string.parse_int64(s, base=radix)) catch {
+    _ => None
+  }
 }
 
 ///|
 /// Parse a double; `None` on failure.
 fn try_parse_double(s : String) -> Double? {
-  try Some(@string.parse_double(s)) catch { _ => None }
+  Some(@string.parse_double(s)) catch {
+    _ => None
+  }
 }
 
 ///|
@@ -110,12 +123,11 @@ pub fn resolve_plain(s : String) -> YamlValue {
     "" | "~" | "null" | "Null" | "NULL" => Null
     "true" | "True" | "TRUE" => Bool(true)
     "false" | "False" | "FALSE" => Bool(false)
-    ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Float(
-      Double::inf(1),
-    )
-    "-.inf" | "-.Inf" | "-.INF" => Float(Double::inf(-1))
-    ".nan" | ".NaN" | ".NAN" => Float(Double::nan())
-    _ => {
+    ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" =>
+      Float(@double.infinity)
+    "-.inf" | "-.Inf" | "-.INF" => Float(@double.neg_infinity)
+    ".nan" | ".NaN" | ".NAN" => Float(@double.not_a_number)
+    _ =>
       if is_core_int(s) {
         let stripped = strip_int_prefix(s)
         match try_parse_int64(stripped.signed, stripped.radix) {
@@ -130,11 +142,11 @@ pub fn resolve_plain(s : String) -> YamlValue {
       } else {
         Str(s)
       }
-    }
   }
 }
 
-struct Stripped {
+///|
+priv struct Stripped {
   signed : String // sign + digits, ready for radix parsing
   digits : String // digits only, for validation
   radix : Int
@@ -149,18 +161,26 @@ fn strip_int_prefix(s : String) -> Stripped {
   } else {
     0
   }
-  let sign : String = if start == 1 { s.substring(start=0, end=1) } else { "" }
-  let body = s.substring(start=start, end=s.length())
+  let sign : String = if start == 1 { s[0:1].to_owned() } else { "" }
+  let body = s[start:s.length()].to_owned()
   if body.length() > 2 &&
     body.get_char(0).unwrap() == '0' &&
     (body.get_char(1).unwrap() == 'x' || body.get_char(1).unwrap() == 'X') {
-    { signed: sign + body.substring(start=2, end=body.length()), digits: body.substring(start=2, end=body.length()), radix: 16 }
+    {
+      signed: sign + body[2:body.length()].to_owned(),
+      digits: body[2:body.length()].to_owned(),
+      radix: 16,
+    }
   } else if body.length() > 2 &&
     body.get_char(0).unwrap() == '0' &&
     (body.get_char(1).unwrap() == 'o' || body.get_char(1).unwrap() == 'O') {
-    { signed: sign + body.substring(start=2, end=body.length()), digits: body.substring(start=2, end=body.length()), radix: 8 }
+    {
+      signed: sign + body[2:body.length()].to_owned(),
+      digits: body[2:body.length()].to_owned(),
+      radix: 8,
+    }
   } else {
-    { signed: s, digits: body, radix: 10 }
+    { signed: s, digits: body, radix: 10, }
   }
 }
 
@@ -190,6 +210,7 @@ fn is_core_int(s : String) -> Bool {
   true
 }
 
+///|
 fn is_dec_digit(c : Char) -> Bool {
   c >= '0' && c <= '9'
 }

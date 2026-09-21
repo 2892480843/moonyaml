@@ -14,11 +14,26 @@
 /// A YAML parse error: a message plus the 1-based line where it occurred.
 pub(all) suberror YamlError {
   ParseError(String, Int)
-} derive(Eq, Show)
+} derive(Eq)
+
+///|
+pub extend YamlError with Eq::{equal, not_equal}
+
+///|
+pub extend YamlError with Show::{to_string, output}
+
+///|
+/// Errors render as `ParseError(<message>, <line>)`.
+pub impl Show for YamlError with fn output(self, logger) {
+  match self {
+    ParseError(msg, line) =>
+      logger.write_string("ParseError(\"\{msg}\", \{line})")
+  }
+}
 
 ///|
 /// Internal parser state: a cursor over the source text.
-struct Parser {
+priv struct Parser {
   src : String
   len : Int
   mut idx : Int // code-unit index of the next character
@@ -28,7 +43,7 @@ struct Parser {
 
 ///|
 /// Result of looking for the next content line.
-enum Seek {
+priv enum Seek {
   Content(Int) // content starts here, at the given column
   Eof
   DocStart
@@ -81,7 +96,7 @@ fn bump(p : Parser) -> Char {
 ///|
 /// Is the cursor at end of line (or end of input)?
 fn at_eol(p : Parser) -> Bool {
-  p.idx >= p.len || (peek(p) == Some('\n'))
+  p.idx >= p.len || peek(p) == Some('\n')
 }
 
 ///|
@@ -135,10 +150,7 @@ fn finish_line(p : Parser) -> Unit raise YamlError {
     Some('#') => skip_to_eol(p)
     None => return
     Some('\n') => ()
-    Some(c) => {
-      println("DBG finish_line line=\{p.line} idx=\{p.idx} around=\{p.src.substring(start=p.idx - 10, end=p.idx)}|NEXT=\{p.src.substring(start=p.idx, end=p.idx + 10)}")
-      raise err(p, "unexpected content after value")
-    }
+    Some(c) => raise err(p, "unexpected content after value: '\{c}'")
   }
   consume_newline(p)
 }
@@ -170,7 +182,8 @@ fn seek_content(p : Parser) -> Seek raise YamlError {
         ignore(bump(p))
         continue
       }
-      Some('\t') => raise err(p, "tab characters are not allowed in indentation")
+      Some('\t') =>
+        raise err(p, "tab characters are not allowed in indentation")
       Some('#') => {
         skip_to_eol(p)
         consume_newline(p)
@@ -268,7 +281,7 @@ fn scan_name(p : Parser) -> String {
     }
     ignore(bump(p))
   }
-  p.src.substring(start=start, end=p.idx)
+  p.src[start:p.idx].to_owned()
 }
 
 ///|
@@ -305,13 +318,12 @@ fn fold_lines(parts : Array[String]) -> String {
 /// Scan a single-quoted scalar; the cursor is on the opening `'`.
 fn scan_single_quoted(p : Parser) -> String raise YamlError {
   ignore(bump(p))
-  let buf : StringBuilder = StringBuilder::StringBuilder(size_hint=32)
   let parts : Array[String] = []
   let line = StringBuilder::StringBuilder(size_hint=32)
   while true {
     match peek(p) {
       None => raise err(p, "unterminated single-quoted scalar")
-      Some('\'') => {
+      Some('\'') =>
         if peek_at(p, 1) == Some('\'') {
           line.write_char('\'')
           ignore(bump(p))
@@ -321,7 +333,6 @@ fn scan_single_quoted(p : Parser) -> String raise YamlError {
           parts.push(line.to_string())
           return fold_lines(parts)
         }
-      }
       Some('\n') => {
         // fold: trim trailing spaces of this line, leading of the next
         let text = line.to_string()
@@ -350,12 +361,13 @@ fn scan_single_quoted(p : Parser) -> String raise YamlError {
   abort("unreachable")
 }
 
+///|
 fn trim_right_spaces(s : String) -> String {
   let mut end = s.length()
   while end > 0 && s.get_char(end - 1).unwrap() == ' ' {
     end = end - 1
   }
-  s.substring(start=0, end=end)
+  s[0:end].to_owned()
 }
 
 ///|
@@ -403,18 +415,18 @@ fn scan_double_quoted(p : Parser) -> String raise YamlError {
         ignore(bump(p))
         match peek(p) {
           None => raise err(p, "unterminated escape in double-quoted scalar")
-          Some(e) => {
+          Some(e) =>
             match e {
               '0' => {
                 line.write_char('\u{0}')
                 ignore(bump(p))
               }
               'a' => {
-                line.write_char('\x07')
+                line.write_char('\u{07}')
                 ignore(bump(p))
               }
               'b' => {
-                line.write_char('\x08')
+                line.write_char('\u{08}')
                 ignore(bump(p))
               }
               't' | '\t' => {
@@ -426,11 +438,11 @@ fn scan_double_quoted(p : Parser) -> String raise YamlError {
                 ignore(bump(p))
               }
               'v' => {
-                line.write_char('\x0b')
+                line.write_char('\u{0b}')
                 ignore(bump(p))
               }
               'f' => {
-                line.write_char('\x0c')
+                line.write_char('\u{0c}')
                 ignore(bump(p))
               }
               'r' => {
@@ -438,7 +450,7 @@ fn scan_double_quoted(p : Parser) -> String raise YamlError {
                 ignore(bump(p))
               }
               'e' => {
-                line.write_char('\x1b')
+                line.write_char('\u{1b}')
                 ignore(bump(p))
               }
               ' ' => {
@@ -493,14 +505,12 @@ fn scan_double_quoted(p : Parser) -> String raise YamlError {
                 ignore(bump(p))
                 skip_spaces(p)
               }
-              other => {
+              other =>
                 raise err(
-                    p,
-                    "unknown escape sequence '\\\{other}' in double-quoted scalar",
-                  )
-              }
+                  p,
+                  "unknown escape sequence '\\\{other}' in double-quoted scalar",
+                )
             }
-          }
         }
       }
       Some('\n') => {
@@ -524,7 +534,8 @@ fn scan_double_quoted(p : Parser) -> String raise YamlError {
   abort("unreachable")
 }
 
-fn int_to_char(p : Parser, v : Int) -> Char {
+///|
+fn int_to_char(_p : Parser, v : Int) -> Char {
   match Int::to_char(v) {
     Some(c) => c
     None => abort("invalid unicode escape")
@@ -541,7 +552,6 @@ fn colon_terminates(p : Parser, in_flow : Bool) -> Bool {
     Some('\n') => true
     Some(' ') => true
     Some(c) => in_flow && (c == ',' || c == ']' || c == '}')
-    _ => false
   }
 }
 
@@ -560,8 +570,7 @@ fn scan_plain_segment(p : Parser, in_flow : Bool) -> String {
     if c == ':' && colon_terminates(p, in_flow) {
       break
     }
-    if in_flow &&
-      (c == ',' || c == '[' || c == ']' || c == '{' || c == '}') {
+    if in_flow && (c == ',' || c == '[' || c == ']' || c == '{' || c == '}') {
       break
     }
     ignore(bump(p))
@@ -573,7 +582,7 @@ fn scan_plain_segment(p : Parser, in_flow : Bool) -> String {
   if end < start {
     end = start
   }
-  p.src.substring(start=start, end=end)
+  p.src[start:end].to_owned()
 }
 
 ///|
@@ -617,7 +626,11 @@ fn plain_continuation(p : Parser, parent : Int) -> Array[String] {
     let c = peek(p).unwrap()
     // a new block structure cannot continue a plain scalar
     if c == '-' &&
-      (peek_at(p, 1) == Some(' ') || peek_at(p, 1) == Some('\n') || peek_at(p, 1) == None) {
+      (
+        peek_at(p, 1) == Some(' ') ||
+        peek_at(p, 1) == Some('\n') ||
+        peek_at(p, 1) == None
+      ) {
       p.idx = save
       p.line = save_line
       return parts
@@ -704,14 +717,13 @@ fn parse_block_node(
       let value : YamlValue = if at_eol(p) || peek(p) == Some('#') {
         // node content follows on deeper lines
         match seek_content(p) {
-          Content(c2) => {
+          Content(c2) =>
             if c2 > parent {
               parse_block_node(p, c2, parent)
             } else {
               rewind_line_start(p)
               Null
             }
-          }
           _ => Null
         }
       } else {
@@ -737,9 +749,11 @@ fn parse_block_node(
     return parse_flow_node(p)
   }
   if c == '-' &&
-    (peek_at(p, 1) == Some(' ') ||
+    (
+      peek_at(p, 1) == Some(' ') ||
       peek_at(p, 1) == Some('\n') ||
-      peek_at(p, 1) == None) {
+      peek_at(p, 1) == None
+    ) {
     return parse_block_seq(p, col)
   }
   if c == '?' && peek_at(p, 1) == Some(' ') {
@@ -748,10 +762,10 @@ fn parse_block_node(
   // scalar or block mapping: scan a key candidate
   let save = p.idx
   let save_line = p.line
-  let key_text : String = match c {
-    '\'' => scan_single_quoted(p)
-    '"' => scan_double_quoted(p)
-    _ => scan_plain_segment(p, false)
+  match c {
+    '\'' => ignore(scan_single_quoted(p))
+    '"' => ignore(scan_double_quoted(p))
+    _ => ignore(scan_plain_segment(p, false))
   }
   skip_spaces(p)
   if peek(p) == Some(':') && colon_terminates(p, false) {
@@ -805,9 +819,13 @@ fn insert_pair(pairs : Array[YamlPair], pair : YamlPair) -> Unit {
 ///|
 /// Apply a merge source (a mapping, or a sequence of mappings) into
 /// `pairs`; keys already present are not overridden.
-fn apply_merge(p : Parser, pairs : Array[YamlPair], src : YamlValue) -> Unit raise YamlError {
+fn apply_merge(
+  p : Parser,
+  pairs : Array[YamlPair],
+  src : YamlValue,
+) -> Unit raise YamlError {
   match src {
-    Map(src_pairs) => {
+    Map(src_pairs) =>
       for sp in src_pairs {
         let mut exists = false
         for existing in pairs {
@@ -817,16 +835,17 @@ fn apply_merge(p : Parser, pairs : Array[YamlPair], src : YamlValue) -> Unit rai
           }
         }
         if !exists {
-          pairs.push({ key: sp.key, value: sp.value })
+          pairs.push({ key: sp.key, value: sp.value, })
         }
       }
-    }
-    Seq(items) => {
+    Seq(items) =>
       for item in items {
         apply_merge(p, pairs, item)
       }
-    }
-    _ => raise err(p, "merge key `<<` requires a mapping or a sequence of mappings")
+    _ =>
+      raise err(
+        p, "merge key `<<` requires a mapping or a sequence of mappings",
+      )
   }
 }
 
@@ -851,9 +870,11 @@ fn parse_map_value(p : Parser, key_col : Int) -> YamlValue raise YamlError {
           // a sequence may sit at the same column as its key
           let c = peek(p).unwrap()
           if c == '-' &&
-            (peek_at(p, 1) == Some(' ') ||
+            (
+              peek_at(p, 1) == Some(' ') ||
               peek_at(p, 1) == Some('\n') ||
-              peek_at(p, 1) == None) {
+              peek_at(p, 1) == None
+            ) {
             return parse_block_seq(p, c2)
           }
         }
@@ -877,14 +898,13 @@ fn parse_map_value(p : Parser, key_col : Int) -> YamlValue raise YamlError {
         skip_to_eol(p)
         consume_newline(p)
         match seek_content(p) {
-          Content(c2) => {
+          Content(c2) =>
             if c2 > key_col {
               parse_block_node(p, c2, key_col)
             } else {
               rewind_line_start(p)
               Null
             }
-          }
           _ => Null
         }
       } else {
@@ -907,7 +927,10 @@ fn parse_map_value(p : Parser, key_col : Int) -> YamlValue raise YamlError {
 
 ///|
 /// Parse an inline value that starts on the key's line.
-fn parse_map_value_inline(p : Parser, key_col : Int) -> YamlValue raise YamlError {
+fn parse_map_value_inline(
+  p : Parser,
+  key_col : Int,
+) -> YamlValue raise YamlError {
   match peek(p).unwrap() {
     '|' | '>' => parse_block_scalar(p, key_col)
     '[' | '{' => parse_flow_node(p)
@@ -975,7 +998,7 @@ fn parse_block_map(p : Parser, col : Int) -> YamlValue raise YamlError {
     if is_merge {
       apply_merge(p, pairs, value)
     } else {
-      insert_pair(pairs, { key, value })
+      insert_pair(pairs, { key, value, })
     }
     // find the next entry
     match seek_content(p) {
@@ -985,10 +1008,7 @@ fn parse_block_map(p : Parser, col : Int) -> YamlValue raise YamlError {
           return Map(pairs)
         }
         if c2 > col {
-          raise err(
-              p,
-              "bad indentation: expected column \{col}, found \{c2}",
-            )
+          raise err(p, "bad indentation: expected column \{col}, found \{c2}")
         }
         // c2 == col: next key (or junk, reported by the loop)
       }
@@ -1018,13 +1038,12 @@ fn parse_block_seq(p : Parser, col : Int) -> YamlValue raise YamlError {
       }
       consume_newline(p)
       match seek_content(p) {
-        Content(c2) => {
+        Content(c2) =>
           if c2 > col {
             items.push(parse_block_node(p, c2, col))
           } else {
             items.push(Null)
           }
-        }
         _ => items.push(Null)
       }
     } else {
@@ -1041,16 +1060,15 @@ fn parse_block_seq(p : Parser, col : Int) -> YamlValue raise YamlError {
           return Seq(items)
         }
         if c2 > col {
-          raise err(
-              p,
-              "bad indentation: expected column \{col}, found \{c2}",
-            )
+          raise err(p, "bad indentation: expected column \{col}, found \{c2}")
         }
         let c = peek(p).unwrap()
         if c == '-' &&
-          (peek_at(p, 1) == Some(' ') ||
+          (
+            peek_at(p, 1) == Some(' ') ||
             peek_at(p, 1) == Some('\n') ||
-            peek_at(p, 1) == None) {
+            peek_at(p, 1) == None
+          ) {
           continue
         }
         // not a dash at this column: the sequence ends here
@@ -1089,12 +1107,13 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
         chomp = "strip"
         ignore(bump(p))
       }
-      Some(c) => if c >= '1' && c <= '9' {
-        explicit_indent = c.to_int() - '0'.to_int()
-        ignore(bump(p))
-      } else {
-        break
-      }
+      Some(c) =>
+        if c >= '1' && c <= '9' {
+          explicit_indent = c.to_int() - '0'.to_int()
+          ignore(bump(p))
+        } else {
+          break
+        }
       None => break
     }
   }
@@ -1118,7 +1137,7 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
     while !at_eol(p) {
       ignore(bump(p))
     }
-    let raw = p.src.substring(start=start, end=p.idx)
+    let raw = p.src[start:p.idx].to_owned()
     consume_newline(p)
     // classify the line
     let indent = count_leading_spaces(raw)
@@ -1170,11 +1189,13 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
     } else {
       let mut taken = 0
       let mut idx = 0
-      while taken < content_indent && idx < line.length() && line.get_char(idx).unwrap() == ' ' {
+      while taken < content_indent &&
+            idx < line.length() &&
+            line.get_char(idx).unwrap() == ' ' {
         idx = idx + 1
         taken = taken + 1
       }
-      stripped.push(line.substring(start=idx, end=line.length()))
+      stripped.push(line[idx:line.length()].to_owned())
     }
   }
   let body : String = if style == '|' {
@@ -1187,13 +1208,18 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
     "strip" => trim_trailing_newlines(body)
     "clip" => {
       let t = trim_trailing_newlines(body)
-      if t.length() == 0 { "" } else { t + "\n" }
+      if t.length() == 0 {
+        ""
+      } else {
+        t + "\n"
+      }
     }
     _ => body
   }
   Str(content)
 }
 
+///|
 fn count_leading_spaces(s : String) -> Int {
   let mut n = 0
   while n < s.length() && s.get_char(n).unwrap() == ' ' {
@@ -1265,12 +1291,13 @@ fn fold_block(lines : Array[String], content_indent : Int) -> String {
   buf.to_string()
 }
 
+///|
 fn trim_trailing_newlines(s : String) -> String {
   let mut end = s.length()
   while end > 0 && s.get_char(end - 1).unwrap() == '\n' {
     end = end - 1
   }
-  s.substring(start=0, end=end)
+  s[0:end].to_owned()
 }
 
 // ---------------------------------------------------------------------------
@@ -1354,7 +1381,8 @@ fn parse_flow_seq(p : Parser) -> YamlValue raise YamlError {
         ignore(bump(p))
         return Seq(items)
       }
-      Some(c) => raise err(p, "expected ',' or ']' in flow sequence, found '\{c}'")
+      Some(c) =>
+        raise err(p, "expected ',' or ']' in flow sequence, found '\{c}'")
       None => raise err(p, "unterminated flow sequence")
     }
   }
@@ -1395,7 +1423,7 @@ fn parse_flow_map(p : Parser) -> YamlValue raise YamlError {
     let value : YamlValue = match peek(p) {
       Some(':') => {
         ignore(bump(p))
-        ;skip_flow_ws(p)
+        skip_flow_ws(p)
         match peek(p) {
           Some(',') | Some('}') => Null
           _ => parse_flow_node(p)
@@ -1406,7 +1434,7 @@ fn parse_flow_map(p : Parser) -> YamlValue raise YamlError {
     if is_merge {
       apply_merge(p, pairs, value)
     } else {
-      insert_pair(pairs, { key, value })
+      insert_pair(pairs, { key, value, })
     }
     skip_flow_ws(p)
     match peek(p) {
@@ -1415,7 +1443,8 @@ fn parse_flow_map(p : Parser) -> YamlValue raise YamlError {
         ignore(bump(p))
         return Map(pairs)
       }
-      Some(c) => raise err(p, "expected ',' or '}' in flow mapping, found '\{c}'")
+      Some(c) =>
+        raise err(p, "expected ',' or '}' in flow mapping, found '\{c}'")
       None => raise err(p, "unterminated flow mapping")
     }
   }
@@ -1435,7 +1464,7 @@ fn parse_documents(src : String) -> Array[YamlValue] raise YamlError {
     len: normalized.length(),
     idx: 0,
     line: 1,
-    anchors: Map::new(),
+    anchors: Map([], capacity=8),
   }
   // skip a UTF-8 BOM if present
   if p.len > 0 && peek(p) == Some('\u{feff}') {

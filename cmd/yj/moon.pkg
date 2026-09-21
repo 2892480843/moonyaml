@@ -1,5 +1,9 @@
-// import {
-//   "a111/moonyaml" @lib,
-// }
+import {
+  "a111/moonyaml" @yaml,
+  "moonbitlang/core/json",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
 
 pkgtype(kind: "executable")

@@ -6,7 +6,7 @@
 
 ///|
 /// Serialize to YAML text using block style.
-pub fn YamlValue::to_yaml_string(self : YamlValue, indent~ : Int = 2) -> String {
+pub fn YamlValue::to_yaml_string(self : YamlValue, indent? : Int = 2) -> String {
   if indent < 1 {
     abort("indent must be at least 1")
   }
@@ -17,7 +17,7 @@ pub fn YamlValue::to_yaml_string(self : YamlValue, indent~ : Int = 2) -> String 
 
 ///|
 /// Serialize several documents, separated by `---` markers.
-pub fn to_yaml_all(docs : Array[YamlValue], indent~ : Int = 2) -> String {
+pub fn to_yaml_all(docs : Array[YamlValue], indent? : Int = 2) -> String {
   if indent < 1 {
     abort("indent must be at least 1")
   }
@@ -50,6 +50,7 @@ fn YamlValue::emit_at(
   self.emit_inline(buf, col, step)
 }
 
+///|
 fn write_indent(buf : StringBuilder, col : Int) -> Unit {
   let mut n = 0
   while n < col {
@@ -68,7 +69,7 @@ fn YamlValue::emit_inline(
   step : Int,
 ) -> Unit {
   match self {
-    Map(pairs) => {
+    Map(pairs) =>
       if pairs.length() == 0 {
         buf.write_string("{}\n")
       } else {
@@ -79,8 +80,7 @@ fn YamlValue::emit_inline(
           emit_pair(pair, buf, col, step)
         }
       }
-    }
-    Seq(items) => {
+    Seq(items) =>
       if items.length() == 0 {
         buf.write_string("[]\n")
       } else {
@@ -92,15 +92,13 @@ fn YamlValue::emit_inline(
           item.emit_inline(buf, col + 2, step)
         }
       }
-    }
-    Str(s) => {
+    Str(s) =>
       if is_block_scalar_safe(s) {
         emit_block_scalar(s, buf, col, step)
       } else {
         buf.write_string(emit_str(s))
         buf.write_char('\n')
       }
-    }
     scalar => {
       buf.write_string(emit_scalar_text(scalar))
       buf.write_char('\n')
@@ -110,7 +108,12 @@ fn YamlValue::emit_inline(
 
 ///|
 /// Emit one `key: value` pair; the cursor is at column `col`.
-fn emit_pair(pair : YamlPair, buf : StringBuilder, col : Int, step : Int) -> Unit {
+fn emit_pair(
+  pair : YamlPair,
+  buf : StringBuilder,
+  col : Int,
+  step : Int,
+) -> Unit {
   match pair.key {
     Map(_) | Seq(_) => {
       // Complex keys need explicit `? ` notation; we emit it even though
@@ -125,23 +128,21 @@ fn emit_pair(pair : YamlPair, buf : StringBuilder, col : Int, step : Int) -> Uni
       buf.write_string(emit_key_text(pair.key))
       buf.write_string(":")
       match pair.value {
-        Map(pairs) => {
+        Map(pairs) =>
           if pairs.length() == 0 {
             buf.write_string(" {}\n")
           } else {
             buf.write_char('\n')
             pair.value.emit_at(buf, col + step, step)
           }
-        }
-        Seq(items) => {
+        Seq(items) =>
           if items.length() == 0 {
             buf.write_string(" []\n")
           } else {
             buf.write_char('\n')
             pair.value.emit_at(buf, col + step, step)
           }
-        }
-        Str(s) => {
+        Str(s) =>
           if is_block_scalar_safe(s) {
             buf.write_char(' ')
             emit_block_scalar(s, buf, col, step)
@@ -150,7 +151,6 @@ fn emit_pair(pair : YamlPair, buf : StringBuilder, col : Int, step : Int) -> Uni
             buf.write_string(emit_str(s))
             buf.write_char('\n')
           }
-        }
         _ => {
           buf.write_string(" ")
           buf.write_string(emit_scalar_text(pair.value))
@@ -179,7 +179,7 @@ fn emit_block_scalar(
     chomp = "+"
   } else if s.has_suffix("\n") {
     chomp = ""
-    body = s.substring(start=0, end=s.length() - 1)
+    body = s[0:s.length() - 1].to_owned()
   }
   buf.write_string("|")
   buf.write_string(chomp)
@@ -377,7 +377,9 @@ fn is_indicator(c : Char) -> Bool {
 ///|
 /// Double-quote and escape a string.
 fn escape_double_quoted(s : String) -> String {
-  let buf : StringBuilder = StringBuilder::StringBuilder(size_hint=s.length() + 2)
+  let buf : StringBuilder = StringBuilder::StringBuilder(
+    size_hint=s.length() + 2,
+  )
   buf.write_char('"')
   for c in s {
     match c {
@@ -386,11 +388,11 @@ fn escape_double_quoted(s : String) -> String {
       '\n' => buf.write_string("\\n")
       '\t' => buf.write_string("\\t")
       '\r' => buf.write_string("\\r")
-      '\x0b' => buf.write_string("\\v")
-      '\x0c' => buf.write_string("\\f")
-      '\x08' => buf.write_string("\\b")
-      '\x07' => buf.write_string("\\a")
-      '\x1b' => buf.write_string("\\e")
+      '\u{0b}' => buf.write_string("\\v")
+      '\u{0c}' => buf.write_string("\\f")
+      '\u{08}' => buf.write_string("\\b")
+      '\u{07}' => buf.write_string("\\a")
+      '\u{1b}' => buf.write_string("\\e")
       _ => {
         let n = c.to_int()
         if n < 0x20 {
@@ -406,6 +408,7 @@ fn escape_double_quoted(s : String) -> String {
   buf.to_string()
 }
 
+///|
 fn hex4(n : Int) -> String {
   let digits = "0123456789abcdef"
   let d3 = n & 0xf
@@ -441,9 +444,8 @@ fn YamlValue::emit_flow(self : YamlValue, buf : StringBuilder) -> Unit {
           buf.write_string(", ")
         }
         match pair.key {
-          Str(_) | Bool(_) | Int(_) | Float(_) | Null => buf.write_string(
-            emit_key_text(pair.key),
-          )
+          Str(_) | Bool(_) | Int(_) | Float(_) | Null =>
+            buf.write_string(emit_key_text(pair.key))
           _ => pair.key.emit_flow(buf)
         }
         buf.write_string(": ")
