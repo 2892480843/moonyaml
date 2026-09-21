@@ -1,5 +1,7 @@
 # MoonYAML
 
+[![CI](https://github.com/2892480843/moonyaml/actions/workflows/ci.yml/badge.svg)](https://github.com/2892480843/moonyaml/actions/workflows/ci.yml)
+
 **A YAML 1.2 core-schema parser, emitter, and YAML/JSON converter — written entirely in [MoonBit](https://www.moonbitlang.com).**
 
 MoonBit's package registry already had TOML, CSV and jq-style JSON querying; YAML was the missing piece. MoonYAML fills that gap with a from-scratch parser focused on the subset of YAML that real-world configuration files actually use, backed by a round-trip test suite.
