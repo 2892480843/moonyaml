@@ -100,6 +100,15 @@ pub fn YamlValue::size(self : YamlValue) -> Int {
 // ---------------------------------------------------------------------------
 
 ///|
+fn chars_to_string(cs : Array[Char], from : Int, to : Int) -> String {
+  let buf : StringBuilder = StringBuilder::StringBuilder(size_hint=to - from)
+  for i = from; i < to; i = i + 1 {
+    buf.write_char(cs[i])
+  }
+  buf.to_string()
+}
+
+///|
 /// Parse an integer with an explicit radix; `None` on failure or overflow.
 fn try_parse_int64(s : String, radix : Int) -> Int64? {
   Some(@string.parse_int64(s, base=radix)) catch {
@@ -155,32 +164,22 @@ priv struct Stripped {
 ///|
 /// Strip an optional sign and the `0x` / `0o` base prefix of an integer.
 fn strip_int_prefix(s : String) -> Stripped {
-  let start : Int = if s.length() > 0 &&
-    (s.get_char(0).unwrap() == '+' || s.get_char(0).unwrap() == '-') {
-    1
-  } else {
-    0
-  }
+  let cs = chars_of(s)
+  let n = cs.length()
+  let start : Int = if n > 0 && (cs[0] == '+' || cs[0] == '-') { 1 } else { 0 }
   let sign : String = if start == 1 { s[0:1].to_owned() } else { "" }
-  let body = s[start:s.length()].to_owned()
-  if body.length() > 2 &&
-    body.get_char(0).unwrap() == '0' &&
-    (body.get_char(1).unwrap() == 'x' || body.get_char(1).unwrap() == 'X') {
-    {
-      signed: sign + body[2:body.length()].to_owned(),
-      digits: body[2:body.length()].to_owned(),
-      radix: 16,
-    }
-  } else if body.length() > 2 &&
-    body.get_char(0).unwrap() == '0' &&
-    (body.get_char(1).unwrap() == 'o' || body.get_char(1).unwrap() == 'O') {
-    {
-      signed: sign + body[2:body.length()].to_owned(),
-      digits: body[2:body.length()].to_owned(),
-      radix: 8,
-    }
+  if n - start > 2 &&
+    cs[start] == '0' &&
+    (cs[start + 1] == 'x' || cs[start + 1] == 'X') {
+    let digits = chars_to_string(cs, start + 2, n)
+    { signed: sign + digits, digits, radix: 16, }
+  } else if n - start > 2 &&
+    cs[start] == '0' &&
+    (cs[start + 1] == 'o' || cs[start + 1] == 'O') {
+    let digits = chars_to_string(cs, start + 2, n)
+    { signed: sign + digits, digits, radix: 8, }
   } else {
-    { signed: s, digits: body, radix: 10, }
+    { signed: s, digits: chars_to_string(cs, start, n), radix: 10, }
   }
 }
 
@@ -189,13 +188,14 @@ fn strip_int_prefix(s : String) -> Stripped {
 /// `[-+]? ( [0-9]+ | 0o [0-7]+ | 0x [0-9a-fA-F]+ )`
 fn is_core_int(s : String) -> Bool {
   let stripped = strip_int_prefix(s)
-  let digits = stripped.digits
-  if digits.length() == 0 {
+  let digits = chars_of(stripped.digits)
+  let len = digits.length()
+  if len == 0 {
     return false
   }
   let radix = stripped.radix
-  for i = 0; i < digits.length(); i = i + 1 {
-    let c = digits.get_char(i).unwrap()
+  for i = 0; i < len; i = i + 1 {
+    let c = digits[i]
     let ok : Bool = if radix == 16 {
       is_dec_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
     } else if radix == 8 {
@@ -219,22 +219,22 @@ fn is_dec_digit(c : Char) -> Bool {
 /// Does `s` match the Core Schema float production?
 /// `[-+]? ( [0-9]+ (\. [0-9]*)? | \. [0-9]+ ) ([eE] [-+]? [0-9]+)?`
 fn is_core_float(s : String) -> Bool {
-  let start : Int = if s.length() > 0 &&
-    (s.get_char(0).unwrap() == '+' || s.get_char(0).unwrap() == '-') {
+  let cs = chars_of(s)
+  let len = cs.length()
+  let start : Int = if len > 0 && (cs[0] == '+' || cs[0] == '-') {
     1
   } else {
     0
   }
   let mut i = start
-  let len = s.length()
   let mut saw_digits = false
-  while i < len && is_dec_digit(s.get_char(i).unwrap()) {
+  while i < len && is_dec_digit(cs[i]) {
     i = i + 1
     saw_digits = true
   }
-  if i < len && s.get_char(i).unwrap() == '.' {
+  if i < len && cs[i] == '.' {
     i = i + 1
-    while i < len && is_dec_digit(s.get_char(i).unwrap()) {
+    while i < len && is_dec_digit(cs[i]) {
       i = i + 1
       saw_digits = true
     }
@@ -243,17 +243,17 @@ fn is_core_float(s : String) -> Bool {
     return false
   }
   if i < len {
-    let e = s.get_char(i).unwrap()
+    let e = cs[i]
     if e == 'e' || e == 'E' {
       i = i + 1
       if i < len {
-        let sign = s.get_char(i).unwrap()
+        let sign = cs[i]
         if sign == '+' || sign == '-' {
           i = i + 1
         }
       }
       let mut saw_exp = false
-      while i < len && is_dec_digit(s.get_char(i).unwrap()) {
+      while i < len && is_dec_digit(cs[i]) {
         i = i + 1
         saw_exp = true
       }

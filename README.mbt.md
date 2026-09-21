@@ -36,7 +36,7 @@ moon add a111/moonyaml
 
 ## Library usage
 
-```moonbit
+```moonbit nocheck
 let doc : YamlValue = @moonyaml.parse(
 #|server:
 #|  host: localhost

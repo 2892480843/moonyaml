@@ -363,11 +363,12 @@ fn scan_single_quoted(p : Parser) -> String raise YamlError {
 
 ///|
 fn trim_right_spaces(s : String) -> String {
-  let mut end = s.length()
-  while end > 0 && s.get_char(end - 1).unwrap() == ' ' {
+  let cs = chars_of(s)
+  let mut end = cs.length()
+  while end > 0 && cs[end - 1] == ' ' {
     end = end - 1
   }
-  s[0:end].to_owned()
+  chars_to_string(cs, 0, end)
 }
 
 ///|
@@ -1187,15 +1188,14 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
     if line.length() == 0 {
       stripped.push("")
     } else {
-      let mut taken = 0
+      // count leading spaces by characters: a surrogate pair must not
+      // split an indexing step
+      let cs = chars_of(line)
       let mut idx = 0
-      while taken < content_indent &&
-            idx < line.length() &&
-            line.get_char(idx).unwrap() == ' ' {
+      while idx < cs.length() && idx < content_indent && cs[idx] == ' ' {
         idx = idx + 1
-        taken = taken + 1
       }
-      stripped.push(line[idx:line.length()].to_owned())
+      stripped.push(chars_to_string(cs, idx, cs.length()))
     }
   }
   let body : String = if style == '|' {
@@ -1222,7 +1222,8 @@ fn parse_block_scalar(p : Parser, parent : Int) -> YamlValue raise YamlError {
 ///|
 fn count_leading_spaces(s : String) -> Int {
   let mut n = 0
-  while n < s.length() && s.get_char(n).unwrap() == ' ' {
+  let cs = chars_of(s)
+  while n < cs.length() && cs[n] == ' ' {
     n = n + 1
   }
   n
@@ -1253,7 +1254,7 @@ fn fold_block(lines : Array[String], content_indent : Int) -> String {
       pending_breaks = pending_breaks + 1
       continue
     }
-    let more_indented = line.get_char(0).unwrap() == ' '
+    let more_indented = line.length() > 0 && line.get_char(0) == Some(' ')
     let kind : Int = if more_indented { 2 } else { 1 }
     if prev_kind == 0 {
       // first line: pending blank lines were leading empties
@@ -1293,11 +1294,12 @@ fn fold_block(lines : Array[String], content_indent : Int) -> String {
 
 ///|
 fn trim_trailing_newlines(s : String) -> String {
-  let mut end = s.length()
-  while end > 0 && s.get_char(end - 1).unwrap() == '\n' {
+  let cs = chars_of(s)
+  let mut end = cs.length()
+  while end > 0 && cs[end - 1] == '\n' {
     end = end - 1
   }
-  s[0:end].to_owned()
+  chars_to_string(cs, 0, end)
 }
 
 // ---------------------------------------------------------------------------
@@ -1458,7 +1460,9 @@ fn parse_flow_map(p : Parser) -> YamlValue raise YamlError {
 ///|
 /// Parse all documents in the source text.
 fn parse_documents(src : String) -> Array[YamlValue] raise YamlError {
-  let normalized = src.replace(old="\r\n", new="\n").replace(old="\r", new="\n")
+  let normalized = src
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
   let p : Parser = {
     src: normalized,
     len: normalized.length(),

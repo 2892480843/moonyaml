@@ -200,6 +200,17 @@ fn emit_block_scalar(
 }
 
 ///|
+/// Collect the characters of a string. Strings are UTF-16 underneath, so
+/// code-unit indexing is unsafe around surrogate pairs; use this instead.
+fn chars_of(s : String) -> Array[Char] {
+  let out : Array[Char] = []
+  for c in s {
+    out.push(c)
+  }
+  out
+}
+
+///|
 /// Can `s` be represented as a literal block scalar? We require: at least
 /// one newline, no carriage returns, no trailing whitespace on any line,
 /// no leading newline, and no line consisting only of spaces.
@@ -207,26 +218,25 @@ fn is_block_scalar_safe(s : String) -> Bool {
   if !s.contains("\n") || s.contains("\r") {
     return false
   }
-  if s.length() > 0 && s.get_char(0).unwrap() == '\n' {
+  let cs = chars_of(s)
+  if cs.length() > 0 && cs[0] == '\n' {
     return false
   }
   let mut line_start = 0
-  let len = s.length()
+  let len = cs.length()
   let mut finished = false
   while !finished {
     let mut line_end = line_start
-    while line_end < len && s.get_char(line_end).unwrap() != '\n' {
+    while line_end < len && cs[line_end] != '\n' {
       line_end = line_end + 1
     }
     if line_end > line_start {
-      let last : Int = line_end - 1
-      let c = s.get_char(last).unwrap()
-      if c == ' ' || c == '\t' {
+      if cs[line_end - 1] == ' ' || cs[line_end - 1] == '\t' {
         return false
       }
       let mut only_spaces = true
       for i = line_start; i < line_end; i = i + 1 {
-        if s.get_char(i).unwrap() != ' ' {
+        if cs[i] != ' ' {
           only_spaces = false
           break
         }
@@ -312,12 +322,13 @@ fn fmt_double(d : Double) -> String {
 /// `": "`, `" #"`, or a value that would resolve to a non-string type
 /// disqualifies it.
 fn is_plain_safe(s : String) -> Bool {
-  let len = s.length()
+  let cs = chars_of(s)
+  let len = cs.length()
   if len == 0 {
     return false
   }
-  let first = s.get_char(0).unwrap()
-  let last = s.get_char(len - 1).unwrap()
+  let first = cs[0]
+  let last = cs[len - 1]
   if first == ' ' || last == ' ' {
     return false
   }
@@ -330,14 +341,14 @@ fn is_plain_safe(s : String) -> Bool {
     _ => return false
   }
   for i = 0; i < len; i = i + 1 {
-    let c = s.get_char(i).unwrap()
+    let c = cs[i]
     if c == ':' {
       // ": " or a trailing ":" is dangerous
-      if i + 1 == len || s.get_char(i + 1).unwrap() == ' ' {
+      if i + 1 == len || cs[i + 1] == ' ' {
         return false
       }
     }
-    if c == '#' && i > 0 && s.get_char(i - 1).unwrap() == ' ' {
+    if c == '#' && i > 0 && cs[i - 1] == ' ' {
       return false
     }
     if c == '\t' || c == '\n' || c == '\r' {
