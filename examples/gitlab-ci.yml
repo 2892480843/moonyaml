@@ -1,0 +1,35 @@
+.default_rules: &default_rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: $CI_COMMIT_BRANCH == "main"
+.default_cache: &default_cache
+  key: $CI_COMMIT_REF_SLUG
+  paths:
+    - .cache/
+stages: [build, test, deploy]
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+build:
+  stage: build
+  <<: *default_rules
+  cache:
+    <<: *default_cache
+  script:
+    - docker build -t app:$CI_COMMIT_SHORT_SHA .
+  artifacts:
+    when: always
+    paths:
+      - dist/
+    expire_in: 1 week
+test:
+  stage: test
+  <<: *default_rules
+  needs: [build]
+  parallel:
+    matrix:
+      - VERSION: ["20", "22"]
+deploy:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG
+  environment: production

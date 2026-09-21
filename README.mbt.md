@@ -80,7 +80,7 @@ Note: MoonBit's native runtime does not expose stdin yet, so `yj` reads files (o
 
 ```bash
 moon check --deny-warn   # type-check, zero warnings enforced
-moon test                # 54 tests
+moon test                # 59 tests
 moon fmt                 # format
 ```
 
@@ -104,6 +104,7 @@ CI (GitHub Actions) runs the same steps on every push.
 - **Round-trip properties** — `parse(emit(parse(x))) == parse(x)` and stable emission for families of inputs
 - **Error contract** — 10 cases asserting that malformed input fails *with the expected message fragment and line number*
 - **Blackbox tests** — the public API exercised as an external package would
+- **Real-world compatibility** — GitHub Actions workflows, docker-compose and GitLab CI configs (nested merge keys), CRLF files, CJK/emoji content, 20,000-line generated files (≈0.15s)
 
 ## License
 

@@ -7,7 +7,7 @@ installed (`curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash`).
 
 ```bash
 moon test
-# Total tests: 54, passed: 54, failed: 0.
+# Total tests: 59, passed: 59, failed: 0.
 ```
 
 ## 2. Zero-warning type check (what CI enforces)
@@ -43,6 +43,21 @@ Expected (deployment.yml, abridged):
             "image": "nginx:1.27",
             "ports": [80, 443],
             ...
+```
+
+## 3b. Real-world compatibility
+
+The `examples/` directory contains unmodified-style real-world YAML:
+a GitHub Actions workflow (matrix/include/exclude, `${{ }}` expressions,
+block-scalar `run:`), a docker-compose file, and a GitLab CI config that
+uses nested merge keys (`<<: *anchor` inside `cache:`):
+
+```bash
+moon run cmd/yj -- -c examples/github-actions-workflow.yml
+moon run cmd/yj -- -c examples/docker-compose.yml
+moon run cmd/yj -- -c examples/gitlab-ci.yml
+moon run cmd/yj -- -c examples/crlf-unicode.yml   # CRLF + CJK + emoji
+moon run cmd/yj -- -c examples/generated-20000-lines.yml  # ~0.15s
 ```
 
 ## 4. Convert JSON back to YAML

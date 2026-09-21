@@ -1,0 +1,45 @@
+name: CI
+on:
+  push:
+    branches: [main, "release/*"]
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  schedule:
+    - cron: "0 2 * * 1"
+env:
+  NODE_VERSION: "22"
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [20, 22]
+        include:
+          - os: ubuntu-latest
+            node: 22
+            experimental: true
+        exclude:
+          - os: macos-latest
+            node: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Run
+        run: |
+          set -e
+          echo "building on ${MATRIX_OS}"
+          npm ci
+      - name: Conditional
+        if: github.event_name == 'push'
+        run: echo pushed
+      - name: Timeout test
+        run: sleep 1
+        timeout-minutes: 5

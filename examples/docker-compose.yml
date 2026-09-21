@@ -1,0 +1,34 @@
+services:
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - KEY=value
+      - ANOTHER
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 50M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: "secret#not-comment"
+volumes:
+  db_data:
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
