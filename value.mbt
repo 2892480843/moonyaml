@@ -118,7 +118,7 @@ pub fn resolve_plain(s : String) -> YamlValue {
     _ => {
       if is_core_int(s) {
         let stripped = strip_int_prefix(s)
-        match try_parse_int64(stripped.digits, stripped.radix) {
+        match try_parse_int64(stripped.signed, stripped.radix) {
           Some(i) => Int(i)
           None => Str(s) // out of range: keep the original text
         }
@@ -135,7 +135,8 @@ pub fn resolve_plain(s : String) -> YamlValue {
 }
 
 struct Stripped {
-  digits : String
+  signed : String // sign + digits, ready for radix parsing
+  digits : String // digits only, for validation
   radix : Int
 }
 
@@ -148,17 +149,18 @@ fn strip_int_prefix(s : String) -> Stripped {
   } else {
     0
   }
+  let sign : String = if start == 1 { s.substring(start=0, end=1) } else { "" }
   let body = s.substring(start=start, end=s.length())
   if body.length() > 2 &&
     body.get_char(0).unwrap() == '0' &&
     (body.get_char(1).unwrap() == 'x' || body.get_char(1).unwrap() == 'X') {
-    { digits: body.substring(start=2, end=body.length()), radix: 16 }
+    { signed: sign + body.substring(start=2, end=body.length()), digits: body.substring(start=2, end=body.length()), radix: 16 }
   } else if body.length() > 2 &&
     body.get_char(0).unwrap() == '0' &&
     (body.get_char(1).unwrap() == 'o' || body.get_char(1).unwrap() == 'O') {
-    { digits: body.substring(start=2, end=body.length()), radix: 8 }
+    { signed: sign + body.substring(start=2, end=body.length()), digits: body.substring(start=2, end=body.length()), radix: 8 }
   } else {
-    { digits: body, radix: 10 }
+    { signed: s, digits: body, radix: 10 }
   }
 }
 
