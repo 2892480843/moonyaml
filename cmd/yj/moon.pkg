@@ -1,5 +1,5 @@
 import {
-  "a111/moonyaml" @yaml,
+  "2892480843/moonyaml" @yaml,
   "moonbitlang/core/json",
   "moonbitlang/x/fs",
   "moonbitlang/core/env",

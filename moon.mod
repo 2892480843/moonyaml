@@ -1,10 +1,10 @@
-name = "a111/moonyaml"
+name = "2892480843/moonyaml"
 
 version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = "https://github.com/a111/moonyaml"
+repository = "https://github.com/2892480843/moonyaml"
 
 license = "Apache-2.0"
 
