@@ -1,0 +1,34 @@
+# Configuration with anchors, merge keys, block scalars and typing.
+defaults: &defaults
+  timeout: 30
+  retries: 3
+  verbose: false
+
+production:
+  <<: *defaults
+  retries: 10
+  verbose: true
+
+development:
+  <<: *defaults
+  host: localhost
+
+numbers:
+  int: 42
+  hex: 0x1f
+  octal: 0o17
+  float: 3.14
+  exponent: 1e3
+  infinity: .inf
+
+script: |
+  echo "hello"
+  exit 0
+
+description: >
+  This folded paragraph
+  becomes one line.
+
+quoted:
+  "typed": "123"
+  'literal': 'it''s quoted'
