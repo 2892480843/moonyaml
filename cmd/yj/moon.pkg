@@ -1,0 +1,5 @@
+// import {
+//   "a111/moonyaml" @lib,
+// }
+
+pkgtype(kind: "executable")

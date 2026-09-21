@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonbitlang/setup-moonbit-action@v1
+      - name: Check
+        run: moon check --deny-warn
+      - name: Test
+        run: moon test
+      - name: Build CLI (native)
+        run: moon build --target native cmd/yj
